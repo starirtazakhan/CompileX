@@ -1,0 +1,169 @@
+@import "tailwindcss";
+
+/* Tailwind dark variant */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/* ------------------------------------------------------------------
+   Emerald Terminal palette
+   Remaps Tailwind's slate (neutrals) and cyan (accent) so every page
+   that uses bg-slate-*, border-slate-*, text-cyan-* etc. turns green
+   without editing the page files.
+------------------------------------------------------------------- */
+@theme {
+  --color-slate-50: #f2f9f5;
+  --color-slate-100: #e6f2ec;
+  --color-slate-200: #d3e6dc;
+  --color-slate-300: #b9d3c6;
+  --color-slate-400: #8fb3a0;
+  --color-slate-500: #5f8a76;
+  --color-slate-600: #3d6b57;
+  --color-slate-700: #2a5240;
+  --color-slate-800: #1d3a2d;
+  --color-slate-900: #0f1f18;
+  --color-slate-950: #07110d;
+
+  --color-cyan-50: #ecfdf5;
+  --color-cyan-100: #d1fae5;
+  --color-cyan-200: #a7f3d0;
+  --color-cyan-300: #6ee7b7;
+  --color-cyan-400: #34d399;
+  --color-cyan-500: #10b981;
+  --color-cyan-600: #059669;
+  --color-cyan-700: #047857;
+  --color-cyan-800: #065f46;
+  --color-cyan-900: #064e3b;
+  --color-cyan-950: #022c22;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+:root {
+  color-scheme: dark;
+
+  --background: #07110d;
+  --surface: #0f1f18;
+  --surface-secondary: #0b1812;
+
+  --border: #1d3a2d;
+
+  --text-primary: #e6f2ec;
+  --text-secondary: #b9d3c6;
+  --text-muted: #6f9482;
+
+  --hover: #16291f;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --background: #f1f5f9;
+  --surface: #ffffff;
+  --surface-secondary: #f8fafc;
+
+  --border: #e2e8f0;
+
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #64748b;
+
+  --hover: #f1f5f9;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+
+  background-color: var(--background);
+
+  color: var(--text-primary);
+
+  font-family: Inter, system-ui, Arial, sans-serif;
+
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+input {
+  font-family: inherit;
+}
+
+::selection {
+  background-color: #10b981;
+  color: white;
+}
+
+/* Global light theme overrides for existing Tailwind classes */
+
+:root[data-theme="light"] .bg-slate-950 {
+  background-color: #f1f5f9;
+}
+
+:root[data-theme="light"] .bg-slate-900 {
+  background-color: #ffffff;
+}
+
+:root[data-theme="light"] .bg-slate-800 {
+  background-color: #e2e8f0;
+}
+
+:root[data-theme="light"] .text-white {
+  color: #0f172a;
+}
+
+:root[data-theme="light"] .text-slate-300 {
+  color: #334155;
+}
+
+:root[data-theme="light"] .text-slate-400 {
+  color: #475569;
+}
+
+:root[data-theme="light"] .text-slate-500 {
+  color: #64748b;
+}
+
+:root[data-theme="light"] .text-slate-600 {
+  color: #64748b;
+}
+
+:root[data-theme="light"] .border-slate-800 {
+  border-color: #e2e8f0;
+}
+
+:root[data-theme="light"] .border-slate-700 {
+  border-color: #cbd5e1;
+}
+
+:root[data-theme="light"] .hover\:bg-slate-900:hover {
+  background-color: #f1f5f9;
+}
+
+:root[data-theme="light"] .hover\:bg-slate-800:hover {
+  background-color: #e2e8f0;
+}
+
+/* Inputs in light theme */
+
+:root[data-theme="light"] input:not([type="checkbox"]):not([type="range"]),
+:root[data-theme="light"] select {
+  background-color: #ffffff;
+  color: #0f172a;
+}
+
+/* Editor and output surfaces */
+
+:root[data-theme="light"] .bg-slate-950 input {
+  color: #0f172a;
+}
