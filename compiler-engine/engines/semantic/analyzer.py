@@ -10,291 +10,275 @@ class SemanticAnalyzer:
         self.symbol_table = {}
         self.errors = []
 
-    # --------------------------------
-    # Main Analysis
-    # --------------------------------
-
     def analyze(self):
 
-        self.analyze_statements(
-            self.ast["body"]
-        )
+        for statement in self.ast.get("body", []):
+            self.analyze_statement(statement)
+
+        return self.build_result()
+
+    def build_result(self):
 
         return {
             "success": len(self.errors) == 0,
-            "symbol_table": list(self.symbol_table.values()),
-            "errors": self.errors
+            "symbol_table": self.symbol_table,
+            "symbolTable": self.symbol_table,
+            "errors": self.errors,
+            "stage": "semantic"
         }
 
-    # --------------------------------
-    # Statement Analysis
-    # --------------------------------
+    def analyze_statement(self, statement):
 
-    def analyze_statements(self, statements):
+        statement_type = statement["type"]
 
-        for statement in statements:
+        if statement_type == "Declaration":
+            self.analyze_declaration(statement)
 
-            statement_type = statement["type"]
+        elif statement_type == "Assignment":
+            self.analyze_assignment(statement)
 
-            if statement_type == "Declaration":
+        elif statement_type == "Print":
+            self.analyze_expression(statement["expression"])
 
-                self.analyze_declaration(statement)
+        elif statement_type == "IfStatement":
 
-            elif statement_type == "Assignment":
+            self.analyze_condition(statement["condition"])
 
-                self.analyze_assignment(statement)
+            for item in statement["consequent"]:
+                self.analyze_statement(item)
 
-            elif statement_type == "Print":
+            for item in statement["alternate"]:
+                self.analyze_statement(item)
 
-                self.analyze_print(statement)
+        elif statement_type == "RepeatStatement":
 
-            elif statement_type == "IfStatement":
+            self.analyze_condition(statement["condition"])
 
-                self.analyze_if(statement)
-
-    # --------------------------------
-    # Variable Declaration
-    # --------------------------------
+            for item in statement["body"]:
+                self.analyze_statement(item)
 
     def analyze_declaration(self, statement):
 
-        name = statement["identifier"]
+        name = statement["name"]
         data_type = statement["data_type"]
 
         if name in self.symbol_table:
 
-            self.add_error(
+            self.errors.append(
                 f"Variable '{name}' is already declared."
             )
 
             return
 
         self.symbol_table[name] = {
-            "name": name,
-            "data_type": data_type,
-            "initialized": False
+            "type": data_type,
+            "initialized": False,
+            "value": None
         }
 
-        if statement["initializer"] is not None:
+        if statement["value"] is not None:
 
-            expression_type = self.evaluate_expression(
-                statement["initializer"]
+            value_type = self.analyze_expression(
+                statement["value"]
             )
 
-            if self.is_compatible(data_type, expression_type):
+            if self.is_compatible(data_type, value_type):
 
                 self.symbol_table[name]["initialized"] = True
 
+                if statement["value"]["type"] in (
+                    "Number",
+                    "String",
+                    "Boolean"
+                ):
+                    self.symbol_table[name]["value"] = (
+                        statement["value"]["value"]
+                    )
+
             else:
 
-                self.add_error(
-                    f"Cannot initialize {data_type.upper()} "
-                    f"variable '{name}' with "
-                    f"{expression_type.upper()} value."
+                self.errors.append(
+                    f"Cannot assign {value_type} to "
+                    f"{data_type} variable '{name}'."
                 )
-
-    # --------------------------------
-    # Assignment
-    # --------------------------------
 
     def analyze_assignment(self, statement):
 
-        name = statement["identifier"]
+        name = statement["name"]
 
         if name not in self.symbol_table:
 
-            self.add_error(
-                f"Variable '{name}' has not been declared."
+            self.errors.append(
+                f"Variable '{name}' is not declared."
             )
 
             return
 
-        expression_type = self.evaluate_expression(
-            statement["expression"]
+        value_type = self.analyze_expression(
+            statement["value"]
         )
 
-        variable_type = self.symbol_table[name]["data_type"]
+        variable_type = self.symbol_table[name]["type"]
 
-        if self.is_compatible(variable_type, expression_type):
+        if self.is_compatible(variable_type, value_type):
 
             self.symbol_table[name]["initialized"] = True
 
+            if statement["value"]["type"] in (
+                "Number",
+                "String",
+                "Boolean"
+            ):
+                self.symbol_table[name]["value"] = (
+                    statement["value"]["value"]
+                )
+            else:
+                self.symbol_table[name]["value"] = None
+
         else:
 
-            self.add_error(
-                f"Cannot assign {expression_type.upper()} "
-                f"to {variable_type.upper()} "
-                f"variable '{name}'."
+            self.errors.append(
+                f"Cannot assign {value_type} to "
+                f"{variable_type} variable '{name}'."
             )
 
-    # --------------------------------
-    # Print Statement
-    # --------------------------------
-
-    def analyze_print(self, statement):
-
-        expression = statement["expression"]
-
-        self.evaluate_expression(expression)
-
-    # --------------------------------
-    # If Statement
-    # --------------------------------
-
-    def analyze_if(self, statement):
-
-        condition = statement["condition"]
-
-        left_type = self.evaluate_expression(
-            condition["left"]
-        )
-
-        right_type = self.evaluate_expression(
-            condition["right"]
-        )
-
-        if (
-            left_type not in ("int", "float")
-            or right_type not in ("int", "float")
-        ):
-
-            self.add_error(
-                "Conditional expressions must compare numeric values."
-            )
-
-        # Analyze IF body
-
-        self.analyze_statements(
-            statement["then_body"]
-        )
-
-        # Analyze ELSE body
-
-        self.analyze_statements(
-            statement["else_body"]
-        )
-
-    # --------------------------------
-    # Expression Evaluation
-    # --------------------------------
-
-    def evaluate_expression(self, expression):
+    def analyze_expression(self, expression):
 
         expression_type = expression["type"]
 
-        # Number
-
         if expression_type == "Number":
+            return expression["data_type"]
 
-            if "." in expression["value"]:
-                return "float"
+        if expression_type == "String":
+            return "text"
 
-            return "int"
+        if expression_type == "Boolean":
+            return "logic"
 
-        # String
-
-        elif expression_type == "String":
-
-            return "string"
-
-        # Identifier
-
-        elif expression_type == "Identifier":
+        if expression_type == "Identifier":
 
             name = expression["name"]
 
             if name not in self.symbol_table:
 
-                self.add_error(
-                    f"Variable '{name}' has not been declared."
+                self.errors.append(
+                    f"Variable '{name}' is not declared."
                 )
 
                 return "unknown"
 
-            return self.symbol_table[name]["data_type"]
+            if not self.symbol_table[name]["initialized"]:
 
-        # Unary Expression
+                self.errors.append(
+                    f"Variable '{name}' is used before initialization."
+                )
 
-        elif expression_type == "UnaryExpression":
+            return self.symbol_table[name]["type"]
 
-            operand_type = self.evaluate_expression(
+        if expression_type == "UnaryExpression":
+
+            operand_type = self.analyze_expression(
                 expression["operand"]
             )
 
-            if operand_type not in ("int", "float", "unknown"):
+            if operand_type not in ("whole", "decimal"):
 
-                self.add_error(
-                    "Unary operators require numeric operands."
+                self.errors.append(
+                    "Unary minus requires a numeric operand."
                 )
 
                 return "unknown"
 
             return operand_type
 
-        # Binary Expression
+        if expression_type == "BinaryExpression":
 
-        elif expression_type == "BinaryExpression":
-
-            left_type = self.evaluate_expression(
+            left_type = self.analyze_expression(
                 expression["left"]
             )
 
-            right_type = self.evaluate_expression(
+            right_type = self.analyze_expression(
                 expression["right"]
             )
 
-            if "unknown" in (left_type, right_type):
-                return "unknown"
-
             if (
-                left_type not in ("int", "float")
-                or right_type not in ("int", "float")
+                left_type not in ("whole", "decimal")
+                or right_type not in ("whole", "decimal")
             ):
 
-                self.add_error(
-                    "Arithmetic expressions require numeric operands."
+                self.errors.append(
+                    "Arithmetic operators require numeric operands."
                 )
 
                 return "unknown"
 
-            if left_type == "float" or right_type == "float":
+            if expression["operator"] == "</>":
+                return "decimal"
 
-                return "float"
+            if (
+                left_type == "decimal"
+                or right_type == "decimal"
+            ):
+                return "decimal"
 
-            return "int"
+            return "whole"
+
+        if expression_type == "Condition":
+
+            self.analyze_condition(expression)
+
+            return "logic"
 
         return "unknown"
 
-    # --------------------------------
-    # Type Compatibility
-    # --------------------------------
+    def analyze_condition(self, condition):
 
-    def is_compatible(self, target_type, expression_type):
+        left_type = self.analyze_expression(
+            condition["left"]
+        )
 
-        if expression_type == "unknown":
-            return False
+        right_type = self.analyze_expression(
+            condition["right"]
+        )
 
-        # int can be promoted to float
+        operator = condition["operator"]
 
-        if target_type == "float" and expression_type == "int":
+        if (
+            left_type in ("whole", "decimal")
+            and right_type in ("whole", "decimal")
+        ):
+            return
+
+        if left_type != right_type:
+
+            self.errors.append(
+                f"Cannot compare incompatible types "
+                f"'{left_type}' and '{right_type}'."
+            )
+
+            return
+
+        if operator in (">>", "<<"):
+
+            if left_type not in ("whole", "decimal"):
+
+                self.errors.append(
+                    "Greater-than and less-than operators "
+                    "require numeric operands."
+                )
+
+    @staticmethod
+    def is_compatible(target_type, value_type):
+
+        if target_type == value_type:
             return True
 
-        return target_type == expression_type
+        # Allow whole numbers to be assigned to decimal variables.
+        if target_type == "decimal" and value_type == "whole":
+            return True
 
-    # --------------------------------
-    # Error Handling
-    # --------------------------------
+        return False
 
-    def add_error(self, message):
-
-        self.errors.append({
-            "message": message
-        })
-
-
-# --------------------------------
-# Public API
-# --------------------------------
 
 def analyze(source_code):
 
@@ -304,9 +288,10 @@ def analyze(source_code):
 
         return {
             "success": False,
-            "symbol_table": [],
+            "symbol_table": {},
+            "symbolTable": {},
             "errors": lexical_result["errors"],
-            "stage": "LEXICAL"
+            "stage": "semantic"
         }
 
     syntax_result = syntax_analyze(source_code)
@@ -315,17 +300,14 @@ def analyze(source_code):
 
         return {
             "success": False,
-            "symbol_table": [],
+            "symbol_table": {},
+            "symbolTable": {},
             "errors": syntax_result["errors"],
-            "stage": "SYNTAX"
+            "stage": "semantic"
         }
 
     analyzer = SemanticAnalyzer(
         syntax_result["ast"]
     )
 
-    result = analyzer.analyze()
-
-    result["stage"] = "SEMANTIC"
-
-    return result
+    return analyzer.analyze()

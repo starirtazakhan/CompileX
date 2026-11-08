@@ -167,17 +167,10 @@ function ASTNode({ node, depth = 0 }) {
           <div key={key}>
             {childNodes.map((child, index) => (
               <div key={`${key}-${index}`}>
-                {Array.isArray(value) && (
-                  <p className="ml-5 mt-2 text-xs font-medium uppercase text-slate-500">
-                    {key} {index + 1}
-                  </p>
-                )}
-
-                {!Array.isArray(value) && (
-                  <p className="ml-5 mt-2 text-xs font-medium uppercase text-slate-500">
-                    {key}
-                  </p>
-                )}
+                <p className="ml-5 mt-2 text-xs font-medium uppercase text-slate-500">
+                  {key}
+                  {Array.isArray(value) ? ` ${index + 1}` : ""}
+                </p>
 
                 <ASTNode
                   node={child}
@@ -193,8 +186,22 @@ function ASTNode({ node, depth = 0 }) {
 }
 
 // Symbol table
-function SymbolTable({ symbols = [] }) {
-  if (!symbols.length) {
+function SymbolTable({ symbols = {} }) {
+
+  // Convert backend object into an array for React rendering.
+  const normalizedSymbols = Array.isArray(symbols)
+    ? symbols
+    : Object.entries(symbols || {}).map(
+        ([name, details]) => ({
+          name,
+          data_type:
+            details.type || details.data_type || "Unknown",
+          initialized: Boolean(details.initialized),
+          value: details.value,
+        })
+      );
+
+  if (!normalizedSymbols.length) {
     return (
       <p className="text-sm text-slate-500">
         No symbols found.
@@ -210,12 +217,13 @@ function SymbolTable({ symbols = [] }) {
             <th className="px-4 py-3">#</th>
             <th className="px-4 py-3">Variable</th>
             <th className="px-4 py-3">Data Type</th>
+            <th className="px-4 py-3">Value</th>
             <th className="px-4 py-3">Initialization</th>
           </tr>
         </thead>
 
         <tbody className="divide-y divide-slate-800">
-          {symbols.map((symbol, index) => (
+          {normalizedSymbols.map((symbol, index) => (
             <tr key={`${symbol.name}-${index}`}>
               <td className="px-4 py-3 text-slate-500">
                 {index + 1}
@@ -226,7 +234,14 @@ function SymbolTable({ symbols = [] }) {
               </td>
 
               <td className="px-4 py-3 text-cyan-400">
-                {symbol.data_type}
+                {symbol.data_type || symbol.type || "Unknown"}
+              </td>
+
+              <td className="px-4 py-3 font-mono text-slate-300">
+                {symbol.value === null ||
+                symbol.value === undefined
+                  ? "-"
+                  : String(symbol.value)}
               </td>
 
               <td className="px-4 py-3">
@@ -314,7 +329,7 @@ function ErrorList({ errors = [] }) {
   );
 }
 
-// Individual compiler stage renderer
+// Individual stage output
 function StageOutput({ stage, data }) {
   if (!data) return null;
 
@@ -409,7 +424,11 @@ function StageOutput({ stage, data }) {
           </h4>
 
           <SymbolTable
-            symbols={data.symbol_table || []}
+            symbols={
+              data.symbol_table ??
+              data.symbolTable ??
+              {}
+            }
           />
 
           <div className="mt-5">
@@ -456,7 +475,6 @@ function OutputPanel({
 }) {
   const [view, setView] = useState("structured");
 
-  // Loading state
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center text-cyan-400">
@@ -471,7 +489,6 @@ function OutputPanel({
     );
   }
 
-  // Error state
   if (error) {
     return (
       <div className="m-4 rounded-lg border border-red-500/30 bg-red-500/10 p-4">
@@ -490,7 +507,6 @@ function OutputPanel({
     );
   }
 
-  // Empty state
   if (!result) {
     return (
       <div className="flex h-full flex-col items-center justify-center text-slate-500">
@@ -507,10 +523,8 @@ function OutputPanel({
     );
   }
 
-  // Normalize API response
   const normalizedResult = result.result || result;
 
-  // Detect Run All response
   const isRunAll =
     activeStage === "all" ||
     Boolean(
@@ -527,7 +541,6 @@ function OutputPanel({
     "icg",
   ];
 
-  // Determine stages to display
   const stagesToDisplay = isRunAll
     ? stageList.filter(
         (stage) => normalizedResult[stage]
@@ -536,7 +549,6 @@ function OutputPanel({
     ? [activeStage]
     : [];
 
-  // Overall status
   const successful =
     normalizedResult.success !== false;
 
@@ -594,7 +606,6 @@ function OutputPanel({
 
         {view === "structured" ? (
           <>
-            {/* Run All Header */}
             {isRunAll && (
               <div className="flex items-center gap-2 rounded-lg border border-slate-800 bg-slate-900 p-4">
                 <Layers
@@ -614,7 +625,6 @@ function OutputPanel({
               </div>
             )}
 
-            {/* Stage Results */}
             {stagesToDisplay.map((stage) => (
               <StageOutput
                 key={stage}
@@ -634,7 +644,6 @@ function OutputPanel({
             )}
           </>
         ) : (
-          /* Raw JSON */
           <pre className="overflow-x-auto whitespace-pre-wrap break-words rounded-lg bg-slate-950 p-4 font-mono text-sm leading-6 text-cyan-300">
             {JSON.stringify(result, null, 2)}
           </pre>

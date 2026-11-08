@@ -2,517 +2,368 @@ from engines.lexical.lexer import analyze as lexical_analyze
 
 
 class ParseError(Exception):
-
-    def __init__(self, message, line, column):
-
-        self.message = message
-        self.line = line
-        self.column = column
-
-        super().__init__(message)
+    pass
 
 
 class Parser:
 
     def __init__(self, tokens, source_code=""):
-
         self.tokens = tokens
         self.source_code = source_code
-
         self.position = 0
 
-        self.current_token = (
-            self.tokens[0] if self.tokens else None
-        )
+    def current(self):
+        return self.tokens[self.position]
 
-    # --------------------------------
-    # Token Management
-    # --------------------------------
+    def check(self, token_type):
+        return self.current()["token"] == token_type
 
     def advance(self):
+        token = self.current()
 
-        self.position += 1
+        if not self.check("EOF"):
+            self.position += 1
 
-        if self.position < len(self.tokens):
-            self.current_token = self.tokens[self.position]
-        else:
-            self.current_token = None
+        return token
 
-    def check(self, lexeme):
+    def expect(self, token_type):
+        if not self.check(token_type):
+            token = self.current()
 
-        return (
-            self.current_token is not None
-            and self.current_token["lexeme"] == lexeme
-        )
-
-    def match(self, lexeme):
-
-        if self.check(lexeme):
-            self.advance()
-            return True
-
-        return False
-
-    def expect(self, lexeme, message):
-
-        if self.check(lexeme):
-
-            token = self.current_token
-            self.advance()
-
-            return token
-
-        self.raise_error(message)
-
-    def raise_error(self, message):
-
-        if self.current_token is not None:
-
-            line = self.current_token["line"]
-            column = self.current_token["column"]
-
-        elif self.tokens:
-
-            last_token = self.tokens[-1]
-
-            line = last_token["line"]
-            column = (
-                last_token["column"]
-                + len(last_token["lexeme"])
+            raise ParseError(
+                f"Expected {token_type}, found '{token['lexeme']}' "
+                f"at line {token['line']}"
             )
 
-        else:
-
-            line = 1
-            column = 1
-
-        raise ParseError(message, line, column)
-
-    # --------------------------------
-    # Program
-    # --------------------------------
+        return self.advance()
 
     def parse(self):
 
-        statements = []
+        body = []
 
-        while self.current_token is not None:
-
-            statement = self.parse_statement()
-
-            statements.append(statement)
+        while not self.check("EOF"):
+            body.append(self.parse_statement())
 
         return {
             "type": "Program",
-            "body": statements
+            "body": body
         }
-
-    # --------------------------------
-    # Statement Selection
-    # --------------------------------
 
     def parse_statement(self):
 
-        if self.check("int") or self.check("float"):
-
+        if self.check("DEFINE"):
             return self.parse_declaration()
 
-        elif self.check("print"):
-
-            return self.parse_print()
-
-        elif self.check("if"):
-
-            return self.parse_if()
-
-        elif (
-            self.current_token is not None
-            and self.current_token["token"] == "IDENTIFIER"
-        ):
-
+        if self.check("IDENTIFIER"):
             return self.parse_assignment()
 
-        else:
+        if self.check("DISPLAY"):
+            return self.parse_print()
 
-            self.raise_error(
-                "Expected a declaration, assignment, print, or if statement."
-            )
+        if self.check("CHECK"):
+            return self.parse_if()
 
-    # --------------------------------
-    # Declaration
-    # --------------------------------
+        if self.check("REPEAT"):
+            return self.parse_loop()
+
+        raise ParseError(
+            f"Unexpected token '{self.current()['lexeme']}' "
+            f"at line {self.current()['line']}"
+        )
 
     def parse_declaration(self):
 
-        type_token = self.current_token
+        self.expect("DEFINE")
 
-        data_type = type_token["lexeme"]
+        type_token = self.advance()
 
-        self.advance()
+        type_mapping = {
+            "TYPE_WHOLE": "whole",
+            "TYPE_DECIMAL": "decimal",
+            "TYPE_TEXT": "text",
+            "TYPE_LOGIC": "logic"
+        }
 
-        identifier = self.expect_identifier()
+        if type_token["token"] not in type_mapping:
+            raise ParseError(
+                f"Invalid data type '{type_token['lexeme']}'"
+            )
 
-        initializer = None
+        variable_type = type_mapping[type_token["token"]]
 
-        if self.match("="):
+        name = self.expect("IDENTIFIER")["lexeme"]
 
-            initializer = self.parse_expression()
+        value = None
 
-        self.expect(
-            ";",
-            "Expected ';' after declaration."
-        )
+        if self.check("ASSIGN"):
+            self.advance()
+            value = self.parse_expression()
+
+        self.expect("SEMICOLON")
 
         return {
             "type": "Declaration",
-            "data_type": data_type,
-            "identifier": identifier["lexeme"],
-            "initializer": initializer
+            "data_type": variable_type,
+            "name": name,
+            "value": value
         }
-
-    # --------------------------------
-    # Assignment
-    # --------------------------------
 
     def parse_assignment(self):
 
-        identifier = self.expect_identifier()
+        name = self.expect("IDENTIFIER")["lexeme"]
 
-        self.expect(
-            "=",
-            "Expected '=' in assignment."
-        )
+        self.expect("ASSIGN")
 
-        expression = self.parse_expression()
+        value = self.parse_expression()
 
-        self.expect(
-            ";",
-            "Expected ';' after assignment."
-        )
+        self.expect("SEMICOLON")
 
         return {
             "type": "Assignment",
-            "identifier": identifier["lexeme"],
-            "expression": expression
+            "name": name,
+            "value": value
         }
-
-    # --------------------------------
-    # Print Statement
-    # --------------------------------
 
     def parse_print(self):
 
-        self.advance()
-
-        self.expect(
-            "(",
-            "Expected '(' after print."
-        )
+        self.expect("DISPLAY")
+        self.expect("LPAREN")
 
         expression = self.parse_expression()
 
-        self.expect(
-            ")",
-            "Expected ')' after print expression."
-        )
-
-        self.expect(
-            ";",
-            "Expected ';' after print statement."
-        )
+        self.expect("RPAREN")
+        self.expect("SEMICOLON")
 
         return {
             "type": "Print",
             "expression": expression
         }
 
-    # --------------------------------
-    # If / Else Statement
-    # --------------------------------
-
     def parse_if(self):
 
-        self.expect(
-            "if",
-            "Expected 'if'."
-        )
+        self.expect("CHECK")
+        self.expect("LPAREN")
 
-        self.expect(
-            "(",
-            "Expected '(' after if."
-        )
+        condition = self.parse_expression()
 
-        condition = self.parse_condition()
+        self.expect("RPAREN")
+        self.expect("LBRACE")
 
-        self.expect(
-            ")",
-            "Expected ')' after condition."
-        )
+        consequent = []
 
-        then_body = self.parse_block()
+        while not self.check("RBRACE"):
+            if self.check("EOF"):
+                raise ParseError("Missing closing brace in check statement")
 
-        else_body = []
+            consequent.append(self.parse_statement())
 
-        if self.match("else"):
+        self.expect("RBRACE")
 
-            else_body = self.parse_block()
+        alternate = []
+
+        if self.check("OTHERWISE"):
+
+            self.advance()
+            self.expect("LBRACE")
+
+            while not self.check("RBRACE"):
+                if self.check("EOF"):
+                    raise ParseError(
+                        "Missing closing brace in otherwise statement"
+                    )
+
+                alternate.append(self.parse_statement())
+
+            self.expect("RBRACE")
 
         return {
             "type": "IfStatement",
             "condition": condition,
-            "then_body": then_body,
-            "else_body": else_body
+            "consequent": consequent,
+            "alternate": alternate
         }
 
-    # --------------------------------
-    # Condition
-    # --------------------------------
+    def parse_loop(self):
 
-    def parse_condition(self):
+        self.expect("REPEAT")
+        self.expect("LPAREN")
 
-        left = self.parse_expression()
+        condition = self.parse_expression()
 
-        relational_operators = (
-            ">", "<", ">=", "<=", "==", "!="
-        )
+        self.expect("RPAREN")
+        self.expect("LBRACE")
 
-        if (
-            self.current_token is None
-            or self.current_token["lexeme"]
-            not in relational_operators
-        ):
+        body = []
 
-            self.raise_error(
-                "Expected a relational operator in condition."
-            )
+        while not self.check("RBRACE"):
 
-        operator = self.current_token["lexeme"]
+            if self.check("EOF"):
+                raise ParseError("Missing closing brace in repeat loop")
 
-        self.advance()
+            body.append(self.parse_statement())
 
-        right = self.parse_expression()
+        self.expect("RBRACE")
+        self.expect("FINISH")
 
         return {
-            "type": "Condition",
-            "operator": operator,
-            "left": left,
-            "right": right
+            "type": "RepeatStatement",
+            "condition": condition,
+            "body": body
         }
 
-    # --------------------------------
-    # Block
-    # --------------------------------
-
-    def parse_block(self):
-
-        self.expect(
-            "{",
-            "Expected '{' to start block."
-        )
-
-        statements = []
-
-        while (
-            self.current_token is not None
-            and not self.check("}")
-        ):
-
-            statements.append(
-                self.parse_statement()
-            )
-
-        self.expect(
-            "}",
-            "Expected '}' to close block."
-        )
-
-        return statements
-
-    # --------------------------------
-    # Expression
-    # --------------------------------
-
     def parse_expression(self):
+        return self.parse_comparison()
 
-        return self.parse_additive()
+    def parse_comparison(self):
+
+        expression = self.parse_additive()
+
+        while self.check("GREATER") or self.check("LESS") or self.check("EQUAL"):
+
+            operator = self.advance()["lexeme"]
+            right = self.parse_additive()
+
+            expression = {
+                "type": "Condition",
+                "operator": operator,
+                "left": expression,
+                "right": right
+            }
+
+        return expression
 
     def parse_additive(self):
 
-        node = self.parse_multiplicative()
+        expression = self.parse_multiplicative()
 
-        while (
-            self.current_token is not None
-            and (
-                self.check("+")
-                or self.check("-")
-            )
-        ):
+        while self.check("ADD") or self.check("SUBTRACT"):
 
-            operator = self.current_token["lexeme"]
-
-            self.advance()
-
+            operator = self.advance()["lexeme"]
             right = self.parse_multiplicative()
 
-            node = {
+            expression = {
                 "type": "BinaryExpression",
                 "operator": operator,
-                "left": node,
+                "left": expression,
                 "right": right
             }
 
-        return node
+        return expression
 
     def parse_multiplicative(self):
 
-        node = self.parse_unary()
+        expression = self.parse_unary()
 
-        while (
-            self.current_token is not None
-            and (
-                self.check("*")
-                or self.check("/")
-            )
-        ):
+        while self.check("MULTIPLY") or self.check("DIVIDE"):
 
-            operator = self.current_token["lexeme"]
-
-            self.advance()
-
+            operator = self.advance()["lexeme"]
             right = self.parse_unary()
 
-            node = {
+            expression = {
                 "type": "BinaryExpression",
                 "operator": operator,
-                "left": node,
+                "left": expression,
                 "right": right
             }
 
-        return node
-
-    # --------------------------------
-    # Unary Expressions
-    # --------------------------------
+        return expression
 
     def parse_unary(self):
 
-        if self.check("+") or self.check("-"):
+        if self.check("SUBTRACT"):
 
-            operator = self.current_token["lexeme"]
-
-            self.advance()
-
-            operand = self.parse_unary()
+            operator = self.advance()["lexeme"]
 
             return {
                 "type": "UnaryExpression",
                 "operator": operator,
-                "operand": operand
+                "operand": self.parse_unary()
             }
 
         return self.parse_primary()
 
-    # --------------------------------
-    # Primary Expressions
-    # --------------------------------
-
     def parse_primary(self):
 
-        if self.current_token is None:
+        if self.check("INTEGER"):
 
-            self.raise_error(
-                "Expected an expression."
-            )
-
-        token = self.current_token
-
-        if token["token"] in ("INTEGER", "FLOAT"):
-
-            self.advance()
+            value = int(self.advance()["lexeme"])
 
             return {
                 "type": "Number",
-                "value": token["lexeme"]
+                "value": value,
+                "data_type": "whole"
             }
 
-        elif token["token"] == "STRING":
+        if self.check("FLOAT"):
 
-            self.advance()
+            value = float(self.advance()["lexeme"])
+
+            return {
+                "type": "Number",
+                "value": value,
+                "data_type": "decimal"
+            }
+
+        if self.check("STRING"):
+
+            value = self.advance()["lexeme"]
 
             return {
                 "type": "String",
-                "value": token["lexeme"][1:-1]
+                "value": value[1:-1]
             }
 
-        elif token["token"] == "IDENTIFIER":
+        if self.check("BOOLEAN"):
 
-            self.advance()
+            value = self.advance()["lexeme"] == "true"
+
+            return {
+                "type": "Boolean",
+                "value": value
+            }
+
+        if self.check("IDENTIFIER"):
+
+            name = self.advance()["lexeme"]
 
             return {
                 "type": "Identifier",
-                "name": token["lexeme"]
+                "name": name
             }
 
-        elif self.match("("):
-
-            expression = self.parse_expression()
-
-            self.expect(
-                ")",
-                "Expected ')' after expression."
-            )
-
-            return expression
-
-        else:
-
-            self.raise_error(
-                "Expected an identifier, number, string, or parenthesized expression."
-            )
-
-    # --------------------------------
-    # Identifier Validation
-    # --------------------------------
-
-    def expect_identifier(self):
-
-        if (
-            self.current_token is not None
-            and self.current_token["token"] == "IDENTIFIER"
-        ):
-
-            token = self.current_token
+        if self.check("LPAREN"):
 
             self.advance()
 
-            return token
+            expression = self.parse_expression()
 
-        self.raise_error("Expected an identifier.")
+            self.expect("RPAREN")
 
+            return expression
 
-# --------------------------------
-# Public API
-# --------------------------------
+        raise ParseError(
+            f"Unexpected expression token '{self.current()['lexeme']}'"
+        )
+
 
 def analyze(source_code):
 
     lexical_result = lexical_analyze(source_code)
 
     if not lexical_result["success"]:
-
         return {
             "success": False,
             "ast": None,
-            "errors": [],
+            "errors": lexical_result["errors"],
             "lexical_errors": lexical_result["errors"]
         }
 
-    parser = Parser(
-        lexical_result["tokens"],
-        source_code
-    )
-
     try:
+
+        parser = Parser(
+            lexical_result["tokens"],
+            source_code
+        )
 
         ast = parser.parse()
 
@@ -528,10 +379,6 @@ def analyze(source_code):
         return {
             "success": False,
             "ast": None,
-            "errors": [{
-                "message": error.message,
-                "line": error.line,
-                "column": error.column
-            }],
+            "errors": [str(error)],
             "lexical_errors": []
-        }
+        } 

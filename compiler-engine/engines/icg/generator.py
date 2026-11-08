@@ -1,5 +1,3 @@
-import json
-
 from engines.lexical.lexer import analyze as lexical_analyze
 from engines.syntax.parser import analyze as syntax_analyze
 from engines.semantic.analyzer import analyze as semantic_analyze
@@ -11,23 +9,14 @@ class IntermediateCodeGenerator:
 
         self.ast = ast
         self.instructions = []
-
         self.temp_counter = 0
         self.label_counter = 0
-
-    # --------------------------------
-    # Generate Temporary Variables
-    # --------------------------------
 
     def new_temp(self):
 
         self.temp_counter += 1
 
-        return f"t{self.temp_counter}"
-
-    # --------------------------------
-    # Generate Labels
-    # --------------------------------
+        return f"T{self.temp_counter}"
 
     def new_label(self):
 
@@ -35,163 +24,121 @@ class IntermediateCodeGenerator:
 
         return f"L{self.label_counter}"
 
-    # --------------------------------
-    # Main Code Generation
-    # --------------------------------
-
     def generate(self):
 
-        for statement in self.ast["body"]:
-
+        for statement in self.ast.get("body", []):
             self.generate_statement(statement)
 
-        return {
-            "success": True,
-            "intermediate_code": self.instructions
-        }
-
-    # --------------------------------
-    # Statement Generation
-    # --------------------------------
+        return self.instructions
 
     def generate_statement(self, statement):
 
         statement_type = statement["type"]
 
-        # Declaration
-
         if statement_type == "Declaration":
 
-            initializer = statement["initializer"]
+            name = statement["name"]
 
-            if initializer is not None:
+            if statement["value"] is not None:
 
-                value = self.generate_expression(initializer)
+                value = self.generate_expression(statement["value"])
 
                 self.instructions.append(
-                    f"{statement['identifier']} = {value}"
+                    f"{name} = {value}"
                 )
-
-        # Assignment
 
         elif statement_type == "Assignment":
 
-            value = self.generate_expression(
-                statement["expression"]
-            )
+            value = self.generate_expression(statement["value"])
 
             self.instructions.append(
-                f"{statement['identifier']} = {value}"
+                f"{statement['name']} = {value}"
             )
-
-        # Print
 
         elif statement_type == "Print":
 
-            value = self.generate_expression(
-                statement["expression"]
-            )
+            value = self.generate_expression(statement["expression"])
 
             self.instructions.append(
-                f"print {value}"
+                f"DISPLAY {value}"
             )
-
-        # If / Else
 
         elif statement_type == "IfStatement":
 
-            self.generate_if(statement)
+            condition = self.generate_expression(statement["condition"])
 
-    # --------------------------------
-    # If / Else Generation
-    # --------------------------------
-
-    def generate_if(self, statement):
-
-        condition = statement["condition"]
-
-        left = self.generate_expression(
-            condition["left"]
-        )
-
-        right = self.generate_expression(
-            condition["right"]
-        )
-
-        operator = condition["operator"]
-
-        else_label = self.new_label()
-
-        end_label = self.new_label()
-
-        self.instructions.append(
-            f"ifFalse {left} {operator} {right} goto {else_label}"
-        )
-
-        for child_statement in statement["then_body"]:
-
-            self.generate_statement(child_statement)
-
-        if statement["else_body"]:
+            else_label = self.new_label()
+            end_label = self.new_label()
 
             self.instructions.append(
-                f"goto {end_label}"
+                f"IF_FALSE {condition} GOTO {else_label}"
+            )
+
+            for item in statement["consequent"]:
+                self.generate_statement(item)
+
+            self.instructions.append(
+                f"GOTO {end_label}"
             )
 
             self.instructions.append(
                 f"{else_label}:"
             )
 
-            for child_statement in statement["else_body"]:
-
-                self.generate_statement(child_statement)
+            for item in statement["alternate"]:
+                self.generate_statement(item)
 
             self.instructions.append(
                 f"{end_label}:"
             )
 
-        else:
+        elif statement_type == "RepeatStatement":
+
+            start_label = self.new_label()
+            end_label = self.new_label()
 
             self.instructions.append(
-                f"{else_label}:"
+                f"{start_label}:"
             )
 
-    # --------------------------------
-    # Expression Generation
-    # --------------------------------
+            condition = self.generate_expression(statement["condition"])
+
+            self.instructions.append(
+                f"IF_FALSE {condition} GOTO {end_label}"
+            )
+
+            for item in statement["body"]:
+                self.generate_statement(item)
+
+            self.instructions.append(
+                f"GOTO {start_label}"
+            )
+
+            self.instructions.append(
+                f"{end_label}:"
+            )
 
     def generate_expression(self, expression):
 
         expression_type = expression["type"]
 
-        # Number
-
         if expression_type == "Number":
+            return str(expression["value"])
 
-            return expression["value"]
+        if expression_type == "String":
+            return f'"{expression["value"]}"'
 
-        # String
+        if expression_type == "Boolean":
+            return str(expression["value"]).lower()
 
-        elif expression_type == "String":
-
-            return json.dumps(expression["value"])
-
-        # Identifier
-
-        elif expression_type == "Identifier":
-
+        if expression_type == "Identifier":
             return expression["name"]
 
-        # Unary Expression
-
-        elif expression_type == "UnaryExpression":
+        if expression_type == "UnaryExpression":
 
             operand = self.generate_expression(
                 expression["operand"]
             )
-
-            if expression["operator"] == "+":
-                return operand
 
             temp = self.new_temp()
 
@@ -201,36 +148,25 @@ class IntermediateCodeGenerator:
 
             return temp
 
-        # Binary Expression
+        if expression_type in ("BinaryExpression", "Condition"):
 
-        elif expression_type == "BinaryExpression":
+            left = self.generate_expression(expression["left"])
+            right = self.generate_expression(expression["right"])
 
-            left = self.generate_expression(
-                expression["left"]
-            )
-
-            right = self.generate_expression(
-                expression["right"]
-            )
+            operator = expression["operator"]
 
             temp = self.new_temp()
 
             self.instructions.append(
-                f"{temp} = {left} {expression['operator']} {right}"
+                f"{temp} = {left} {operator} {right}"
             )
 
             return temp
 
-        return None
+        return "UNKNOWN"
 
-
-# --------------------------------
-# Public API
-# --------------------------------
 
 def generate(source_code):
-
-    # Step 1: Lexical Analysis
 
     lexical_result = lexical_analyze(source_code)
 
@@ -238,12 +174,10 @@ def generate(source_code):
 
         return {
             "success": False,
-            "stage": "LEXICAL",
+            "intermediate_code": [],
             "errors": lexical_result["errors"],
-            "intermediate_code": []
+            "stage": "icg"
         }
-
-    # Step 2: Syntax Analysis
 
     syntax_result = syntax_analyze(source_code)
 
@@ -251,12 +185,10 @@ def generate(source_code):
 
         return {
             "success": False,
-            "stage": "SYNTAX",
+            "intermediate_code": [],
             "errors": syntax_result["errors"],
-            "intermediate_code": []
+            "stage": "icg"
         }
-
-    # Step 3: Semantic Analysis
 
     semantic_result = semantic_analyze(source_code)
 
@@ -264,20 +196,18 @@ def generate(source_code):
 
         return {
             "success": False,
-            "stage": "SEMANTIC",
+            "intermediate_code": [],
             "errors": semantic_result["errors"],
-            "intermediate_code": []
+            "stage": "icg"
         }
 
-    # Step 4: Generate Intermediate Code
+    generator = IntermediateCodeGenerator(syntax_result["ast"])
 
-    generator = IntermediateCodeGenerator(
-        syntax_result["ast"]
-    )
+    instructions = generator.generate()
 
-    result = generator.generate()
-
-    result["stage"] = "ICG"
-    result["errors"] = []
-
-    return result
+    return {
+        "success": True,
+        "intermediate_code": instructions,
+        "errors": [],
+        "stage": "icg"
+    }
