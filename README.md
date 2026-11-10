@@ -207,7 +207,7 @@ Recommended additional tools:
 - Postman
 8. Installation and Setup
 Step 1: Clone the Repository
-git clone <YOUR_GITHUB_REPOSITORY_URL>
+git clone <https://github.com/starirtazakhan/CompileX.git> 
 
 Navigate to the project directory:
 cd CompileX
