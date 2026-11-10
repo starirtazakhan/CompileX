@@ -205,9 +205,11 @@ Before running CompileX, ensure that the following software is installed:
 Recommended additional tools:
 - MongoDB Compass
 - Postman
-8. Installation and Setup
+8. Installation and Setup:
 Step 1: Clone the Repository
+
 git clone <https://github.com/starirtazakhan/CompileX.git> 
+
 
 Navigate to the project directory:
 cd CompileX
@@ -376,4 +378,5 @@ Compiler Engine: Python and FastAPI
 Database: MongoDB  
 
 CompileX is developed as an academic Compiler Construction project and demonstrates the integration of compiler theory with modern web development technologies.
-CompileX — Write. Analyze. Understand.
+
+CompileX —> Write. Analyze. Understand.
